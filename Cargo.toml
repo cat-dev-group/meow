@@ -1,0 +1,17 @@
+[package]
+name = "meow"
+version = "0.1.0"
+authors = [
+    "dawnofmidnight <dawnofmidnight1128@gmail.com>",
+    "Aboo Minister <aboominister@gmail.com>"
+]
+edition = "2021"
+description = "The reference implementation of Meow"
+repository = "https://github.com/cat-dev-group/meow"
+license = "MIT"
+
+[dependencies]
+ansi_term = "0.12"
+anyhow = "1.0"
+clap = { version = "3.0.0-beta.4", features = ["derive"] }
+thiserror = "1.0"
