@@ -5,17 +5,17 @@
 //! lexing -> ...
 //!
 //! Each of these phases may contain more specific steps, documented within
-//! their respective modules
+//! their respective modules.
 
 pub mod errors;
 pub mod lexer;
 
 use anyhow::Result;
-use lexer::Lexer;
+use lexer::{token::TokenKind, Lexer};
 use std::{fs, path::Path};
 
 /// Create an instance of [`Lexer`](lexer::Lexer). This doesn't evaluate
-/// anything itself, but exists for testing an
+/// anything itself, but exists for testing and
 pub fn lex(source: &str) -> Lexer {
     Lexer::new(source)
 }
@@ -23,8 +23,13 @@ pub fn lex(source: &str) -> Lexer {
 pub fn parse(source: &str) {
     let mut lexer = lex(source);
 
-    while let Some(token) = lexer.next() {
-        println!("{}", token)
+    loop {
+        let next = lexer.next_token();
+        if next.kind == TokenKind::Eof {
+            break;
+        } else {
+            println!("{}", next);
+        }
     }
 }
 

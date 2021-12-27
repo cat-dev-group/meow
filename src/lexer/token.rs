@@ -91,3 +91,11 @@ impl fmt::Display for Token {
         write!(f, "{:?} at {}:{}", self.kind, self.line, self.column)
     }
 }
+
+impl Token {
+    /// Create a new token. This is only used by way of the `create_token`
+    /// method on the `Lexer` struct, but is available for testing purposes.
+    pub fn new(kind: TokenKind, line: u32, column: u32) -> Self {
+        Self { kind, line, column }
+    }
+}

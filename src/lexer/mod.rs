@@ -1,7 +1,7 @@
 //! Lexing is the first step of Meow's execution. The primary goal is to create
-//! a stream of [`Token`](lexer::Token)s for the parser to consume on demand.
-//! Consumption is done through the `.next()` instance method on the `Lexer`
-//! struct.
+//! a stream of [`Token`](crate::lexer::token::Token)s for the parser to
+//! consume on demand. Consumption is done through the `.next_token()` method
+//! on the `Lexer` struct.
 //!
 //! The lexer is fairly standard, iterating through a
 //! [`Peekable`](std::iter::Peekable) sequence of [`Chars`](std::str::Chars),
@@ -17,11 +17,35 @@ use token::{
     TokenKind::{self, *},
 };
 
+/// Returns true if the `c` matches Unicode's Pattern_White_Space. This does
+/// not include `\n`, however, because that is handled separately.
+fn is_whitespace(c: char) -> bool {
+    matches!(
+        c,
+        // Usual ASCII suspects
+        '\u{0009}'   // \t
+        | '\u{000B}' // vertical tab
+        | '\u{000C}' // form feed
+        | '\u{000D}' // \r
+        | '\u{0020}' // space
+
+        // NEXT LINE from latin1
+        | '\u{0085}'
+
+        // Bidi markers
+        | '\u{200E}' // LEFT-TO-RIGHT MARK
+        | '\u{200F}' // RIGHT-TO-LEFT MARK
+
+        // Dedicated whitespace characters from Unicode
+        | '\u{2028}' // LINE SEPARATOR
+        | '\u{2029}' // PARAGRAPH SEPARATOR
+    )
+}
+
 /// The `Lexer` struct provides the first step of Meow's execution. It accepts
 /// a UTF-8 encoded string, and converts it into a stream of `Token`s for the
 /// parser to use to generate an AST.
 pub struct Lexer<'a> {
-    input: String,
     source: Peekable<Chars<'a>>,
     position: usize,
     line: u32,
@@ -37,16 +61,15 @@ impl<'a> Lexer<'a> {
     /// ```
     /// use meow::lexer::Lexer;
     ///
-    /// let program = "
+    /// let program = r#"
     /// fun main() {
-    ///     println(\"Hello, world!\");
+    ///     println("Hello, world!");
     /// }
-    /// ";
-    /// let lexer = Lexer::new(program);
+    /// "#;
+    /// let mut lexer = Lexer::new(program);
     /// ```
     pub fn new(source: &'a str) -> Self {
         Self {
-            input: source.to_string(),
             source: source.chars().peekable(),
             position: 0,
             line: 1,
@@ -54,152 +77,124 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    /// Move forward by a single position in the source, and update the `line`
-    /// and `column` fields appropriately. This also returns a `char` to be
-    /// used in the `.next()` method.
+    /// Move a single position and column forward in the lexer. Returns the
+    /// next char in the source.
     fn advance(&mut self) -> Option<char> {
-        let current = match self.source.next() {
-            Some(c) => Some(c),
-            None => None,
-        };
-
         self.position += 1;
-        if current == Some('\n') {
-            self.line += 1;
-            self.column = 1;
-        } else {
-            self.column += 1;
-        }
-
-        current
+        self.column += 1;
+        self.source.next()
     }
 
-    /// Given a `TokenKind`, create an `Option<Token>` with the `line` and
-    /// `column` data from the lexer.
-    fn create_token(&mut self, kind: TokenKind) -> Option<Token> {
-        Some(Token {
-            kind,
-            line: self.line,
-            column: self.column,
-        })
+    /// Return the next char in the source without consuming it, or return `\0`
+    /// if it is `None`.
+    fn peek(&mut self) -> char {
+        *self.source.peek().unwrap_or(&'\0')
     }
 
-    fn with_single(&mut self, token: TokenKind) -> Option<Token> {
-        return match self.source.next() {
-            Some(_) => self.create_token(token),
-            None => None,
-        };
+    /// Given a `TokenKind`, create an `Token` with the `line` and `column`
+    /// data from the lexer.
+    fn create_token(&mut self, kind: TokenKind) -> Token {
+        Token::new(kind, self.line, self.column)
     }
 
-    fn with_double(&mut self, token: TokenKind, second_char: char) -> Option<Token> {
-        match self.source.next() {
-            Some(second) => {
-                if second == second_char {
-                    self.create_token(token)
-                } else {
-                    self.create_token(Invalid)
-                }
-            }
-            None => None,
-        }
-    }
-
+    /// Match the next token. If it's the expected character, generate a
+    /// specified token. Otherwise, generate another specified token.
     fn with_single_or_double(
         &mut self,
         expected_double: char,
         single: TokenKind,
         double: TokenKind,
-    ) -> Option<Token> {
-        return match self.source.next() {
-            Some(next) => {
-                if next == expected_double {
-                    self.advance();
-                    self.create_token(double)
-                } else {
-                    self.create_token(single)
-                }
-            }
-            None => None,
-        };
-    }
-
-    fn dot_and_ranges(&mut self) -> Option<Token> {
-        if let Some(second) = self.source.next() {
-            if second == '.' {
-                if let Some(third) = self.source.next() {
-                    if third == '=' {
-                        self.create_token(RangeInclusive)
-                    } else {
-                        self.create_token(Range)
-                    }
-                } else {
-                    None
-                }
-            } else {
-                self.create_token(Dot)
-            }
+    ) -> Token {
+        if self.peek() == expected_double {
+            let token = self.create_token(double);
+            self.advance();
+            token
         } else {
-            None
+            self.create_token(single)
         }
     }
 
-    /// Receive the next `Token` for use in the parser. This is the method that
+    /// Match the next token. If it's the expected character, generate a
+    /// specified token. Otherwise, generate an Invalid token.
+    fn with_double(&mut self, expected: char, kind: TokenKind) -> Token {
+        if self.peek() == expected {
+            let token = self.create_token(kind);
+            self.advance();
+            token
+        } else {
+            self.create_token(Invalid)
+        }
+    }
+
+    /// Return the next `Token` for use in the parser. This is the method that
     /// completes the final token matching and pulls together all other parts
     /// of the Lexer.
     ///
     /// # Examples
     ///
     /// ```
-    /// use meow::lexer::Lexer;
+    /// use meow::lexer::{Lexer, token::TokenKind};
     ///
-    /// let program = "
+    /// let program = r#"
     /// fun main() {
-    ///     println(\"Hello, world!\");
+    ///     println("Hello, world!");
     /// }
-    /// ";
+    /// "#;
     /// let mut lexer = Lexer::new(program);
-    /// while let Some(token) = lexer.next() {
-    ///    println!("{}", token);
+    ///
+    /// loop {
+    ///     let next = lexer.next_token();
+    ///     if next.kind == TokenKind::Eof {
+    ///         break;
+    ///     } else {
+    ///         println!("{}", next);
+    ///     }
     /// }
     /// ```
-    pub fn next(&mut self) -> Option<Token> {
-        let c = self.advance().unwrap_or('\0');
+    pub fn next_token(&mut self) -> Token {
+        let next = self.advance();
 
-        match c {
-            '\0' => {
-                if self.position > self.input.len() {
-                    None
-                } else {
-                    self.create_token(Eof)
+        if let Some(c) = next {
+            return match c {
+                '.' if self.peek() == '.' => {
+                    self.advance();
+                    if self.peek() == '=' {
+                        let token = self.create_token(RangeInclusive);
+                        self.advance();
+                        token
+                    } else {
+                        self.create_token(Range)
+                    }
                 }
-            }
 
-            '(' => self.with_single(OpenParen),
-            ')' => self.with_single(CloseParen),
-            '[' => self.with_single(OpenBracket),
-            ']' => self.with_single(CloseBracket),
-            '{' => self.with_single(OpenBrace),
-            '}' => self.with_single(CloseBrace),
-            ',' => self.with_single(Comma),
-            ';' => self.with_single(Semicolon),
+                '(' => self.create_token(OpenParen),
+                ')' => self.create_token(CloseParen),
+                '[' => self.create_token(OpenBracket),
+                ']' => self.create_token(CloseBracket),
+                '{' => self.create_token(OpenBrace),
+                '}' => self.create_token(CloseBrace),
+                ',' => self.create_token(Comma),
+                '.' => self.create_token(Dot),
+                ';' => self.create_token(Semicolon),
 
-            '&' => self.with_double(And, '&'),
-            '|' => self.with_double(Or, '|'),
+                '&' => self.with_double('&', And),
+                '|' => self.with_double('|', Or),
 
-            '.' => self.dot_and_ranges(),
+                '=' => self.with_single_or_double('=', Equal, EqualEqual),
+                '!' => self.with_single_or_double('=', Bang, BangEqual),
+                '>' => self.with_single_or_double('=', Greater, GreaterEqual),
+                '<' => self.with_single_or_double('=', Less, LessEqual),
+                '+' => self.with_single_or_double('=', Plus, PlusEqual),
+                '-' => self.with_single_or_double('=', Minus, MinusEqual),
+                '*' => self.with_single_or_double('=', Star, StarEqual),
+                '/' => self.with_single_or_double('=', Slash, SlashEqual),
 
-            '=' => self.with_single_or_double('=', Equal, EqualEqual),
-            '!' => self.with_single_or_double('=', Bang, BangEqual),
-            '>' => self.with_single_or_double('=', Greater, GreaterEqual),
-            '<' => self.with_single_or_double('=', Less, LessEqual),
-            '+' => self.with_single_or_double('=', Plus, PlusEqual),
-            '-' => self.with_single_or_double('=', Minus, MinusEqual),
-            '*' => self.with_single_or_double('=', Star, StarEqual),
-            '/' => self.with_single_or_double('=', Slash, SlashEqual),
+                c if is_whitespace(c) => self.next_token(),
 
-            ' ' | '\n' | '\t' => self.next(),
-
-            _ => self.create_token(Invalid),
+                _ => self.create_token(Invalid),
+            };
         }
+
+        self.create_token(Eof)
     }
 }

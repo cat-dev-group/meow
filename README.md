@@ -31,6 +31,13 @@ perform optimizations. This can be ran with:
 cargo build
 ```
 
+Meow has an in-progress test suite that will be updated as the language adds
+new features. This can be ran with:
+
+```sh
+cargo test
+```
+
 Also, "internal" documentation can be generated with `rustdoc`. This
 documentation is auto-generated from doc-comments within the source code, and
 do not benefit the end users of Meow in any way. This can be invoked with the
