@@ -24,6 +24,7 @@ fn is_whitespace(c: char) -> bool {
         c,
         // Usual ASCII suspects
         '\u{0009}'   // \t
+        | '\u{000A}' // \n
         | '\u{000B}' // vertical tab
         | '\u{000C}' // form feed
         | '\u{000D}' // \r
@@ -85,6 +86,24 @@ impl<'a> Lexer<'a> {
         self.source.next()
     }
 
+    /// Move a single position and line forward in the lexer, and reset the
+    /// rolumn. Returns the next char in the source.
+    fn advance_line(&mut self) -> Option<char> {
+        self.position += 1;
+        self.line += 1;
+        self.column = 0;
+        self.source.next()
+    }
+
+    /// Advance tokens while being aware of newlines.
+    fn newline_aware_advance(&mut self) -> Option<char> {
+        if self.peek() == '\n' {
+            self.advance_line()
+        } else {
+            self.advance()
+        }
+    }
+
     /// Return the next char in the source without consuming it, or return `\0`
     /// if it is `None`.
     fn peek(&mut self) -> char {
@@ -117,12 +136,13 @@ impl<'a> Lexer<'a> {
     /// Match the next token. If it's the expected character, generate a
     /// specified token. Otherwise, generate an Invalid token.
     fn with_double(&mut self, expected: char, kind: TokenKind) -> Token {
-        if self.peek() == expected {
+        let c = self.peek();
+        if c == expected {
             let token = self.create_token(kind);
             self.advance();
             token
         } else {
-            self.create_token(Invalid)
+            self.create_token(Error(format!("Unknown character `{}` found in source", c)))
         }
     }
 
@@ -152,21 +172,27 @@ impl<'a> Lexer<'a> {
     /// }
     /// ```
     pub fn next_token(&mut self) -> Token {
-        let next = self.advance();
+        let next = self.newline_aware_advance();
 
         if let Some(c) = next {
             return match c {
+                // TODO: positioning for ranges is off
+                // range characters
                 '.' if self.peek() == '.' => {
+                    let mut token = self.create_token(Range);
                     self.advance();
                     if self.peek() == '=' {
-                        let token = self.create_token(RangeInclusive);
+                        token = self.create_token(RangeInclusive);
                         self.advance();
-                        token
-                    } else {
-                        self.create_token(Range)
                     }
+                    token
                 }
 
+                // literals
+
+                // identifiers and keywords
+
+                // simple single character tokens
                 '(' => self.create_token(OpenParen),
                 ')' => self.create_token(CloseParen),
                 '[' => self.create_token(OpenBracket),
@@ -177,9 +203,11 @@ impl<'a> Lexer<'a> {
                 '.' => self.create_token(Dot),
                 ';' => self.create_token(Semicolon),
 
+                // simple double character tokens
                 '&' => self.with_double('&', And),
                 '|' => self.with_double('|', Or),
 
+                // simple single or double character tokens
                 '=' => self.with_single_or_double('=', Equal, EqualEqual),
                 '!' => self.with_single_or_double('=', Bang, BangEqual),
                 '>' => self.with_single_or_double('=', Greater, GreaterEqual),
@@ -189,12 +217,12 @@ impl<'a> Lexer<'a> {
                 '*' => self.with_single_or_double('=', Star, StarEqual),
                 '/' => self.with_single_or_double('=', Slash, SlashEqual),
 
+                // whitespace
                 c if is_whitespace(c) => self.next_token(),
 
-                _ => self.create_token(Invalid),
+                c => self.create_token(Error(format!("Unknown character `{}` found in source", c))),
             };
         }
-
         self.create_token(Eof)
     }
 }

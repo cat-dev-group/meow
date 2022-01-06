@@ -50,7 +50,7 @@ pub enum TokenKind {
     Int(String),
     Float(String),
 
-    // identifier
+    // identifiers
     Ident(String),
 
     // Keywords
@@ -72,7 +72,8 @@ pub enum TokenKind {
     Let,
     While,
 
-    Invalid,
+    Error(String),
+
     Eof,
 }
 
@@ -93,8 +94,9 @@ impl fmt::Display for Token {
 }
 
 impl Token {
-    /// Create a new token. This is only used by way of the `create_token`
-    /// method on the `Lexer` struct, but is available for testing purposes.
+    /// Create a new token. This is only used in the interpreter by way of the
+    /// various methods on the `Lexer` struct, but is available for testing
+    /// purposes.
     pub fn new(kind: TokenKind, line: u32, column: u32) -> Self {
         Self { kind, line, column }
     }

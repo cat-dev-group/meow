@@ -58,10 +58,13 @@ fn operators() {
 }
 
 #[test]
-fn numbers() {}
+fn strings() {}
 
 #[test]
-fn strings() {}
+fn chars() {}
+
+#[test]
+fn numbers() {}
 
 #[test]
 fn identifiers() {}
