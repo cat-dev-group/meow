@@ -82,7 +82,12 @@ fn strings() {
 }
 
 #[test]
-fn chars() {}
+fn chars() {
+    test_tokens(
+        "'a' 'b' 'c' 'd' 'e'",
+        &vec![Char('a'), Char('b'), Char('c'), Char('d'), Char('e')],
+    )
+}
 
 #[test]
 fn numbers() {

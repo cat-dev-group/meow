@@ -46,7 +46,7 @@ pub enum TokenKind {
 
     // literals
     Str(String),
-    Char(String),
+    Char(char),
     Int(String),
     Float(String),
 

@@ -155,6 +155,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    // Lexes a string
     fn lex_string(&mut self) -> Token {
         let mut value = String::new();
 
@@ -173,6 +174,7 @@ impl<'a> Lexer<'a> {
         self.create_token(Str(value), length + 2)
     }
 
+    // Lexes either an integer or a float
     fn lex_number(&mut self, first_char: char) -> Token {
         let mut is_integer = true;
 
@@ -209,6 +211,7 @@ impl<'a> Lexer<'a> {
         )
     }
 
+    // Checks whether a given value matches the keyword
     fn get_keyword(
         &self,
         value: &str,
@@ -298,6 +301,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    // Lexes identifiers and keywords
     fn get_ident(&mut self, first_char: char) -> Token {
         let mut value = String::from(first_char);
 
@@ -313,6 +317,39 @@ impl<'a> Lexer<'a> {
 
         let token_type = self.ident_type(&value);
         self.create_token(token_type, value.len() as u32)
+    }
+
+    // Lexes a single char
+    fn lex_char(&mut self) -> Token {
+        // If at end, create an error token since there isn't a closing quote
+        if self.at_end() {
+            return self.create_token(
+                Error("Unterminated char literal, expected closing single quote".to_string()),
+                1,
+            );
+        }
+
+        let value = self.advance().unwrap();
+
+        // If the value is a closing quote, create an error token since empty char literals aren't allowed
+        if value == '\'' {
+            return self.create_token(
+                Error("Unterminated char literal, expected closing single quote".to_string()),
+                1,
+            );
+        }
+
+        // If no closing quote is found, create an error token
+        if self.peek() != '\'' {
+            return self.create_token(
+                Error("Unterminated char literal, expected closing single quote".to_string()),
+                1,
+            );
+        }
+        // Consume closing quote
+        self.advance();
+
+        self.create_token(Char(value), 1)
     }
 
     /// Return the next `Token` for use in the parser. This is the method that
@@ -390,6 +427,9 @@ impl<'a> Lexer<'a> {
 
                 // String literals
                 '"' => self.lex_string(),
+
+                // Chars (Characters)
+                '\'' => self.lex_char(),
 
                 // Integer literals
                 '0'..='9' => self.lex_number(c),
