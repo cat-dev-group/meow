@@ -1,22 +1,29 @@
 use meow::{
     lex,
-    lexer::token::{Token, TokenKind::*},
+    lexer::token::{
+        Token,
+        TokenKind::{self, *},
+    },
 };
 
-fn test_tokens(input: &str, expected: &[Token]) {
+use unindent::unindent;
+
+fn test_tokens(input: &str, expected: &[TokenKind]) {
     let mut lexer = lex(input);
 
     let mut tokens: Vec<Token> = Vec::new();
     loop {
         let next = lexer.next_token();
-        if next.kind == Eof {
+        if next.kind == TokenKind::Eof {
             break;
         } else {
             tokens.push(next);
         }
     }
 
-    assert_eq!(tokens, expected);
+    for (token, kind) in tokens.iter().zip(expected) {
+        assert_eq!(&token.kind, kind);
+    }
 }
 
 #[test]
@@ -24,53 +31,103 @@ fn operators() {
     test_tokens(
         r"( ) [ ] { } , . ; && || .. ..= = == ! != > >= < <= + += - -= * *= / /=",
         &vec![
-            Token::new(OpenParen, 1, 1),
-            Token::new(CloseParen, 1, 3),
-            Token::new(OpenBracket, 1, 5),
-            Token::new(CloseBracket, 1, 7),
-            Token::new(OpenBrace, 1, 9),
-            Token::new(CloseBrace, 1, 11),
-            Token::new(Comma, 1, 13),
-            Token::new(Dot, 1, 15),
-            Token::new(Semicolon, 1, 17),
-            Token::new(And, 1, 19),
-            Token::new(Or, 1, 22),
-            Token::new(Range, 1, 25),
-            Token::new(RangeInclusive, 1, 28),
-            Token::new(Equal, 1, 32),
-            Token::new(EqualEqual, 1, 34),
-            Token::new(Bang, 1, 37),
-            Token::new(BangEqual, 1, 39),
-            Token::new(Greater, 1, 42),
-            Token::new(GreaterEqual, 1, 44),
-            Token::new(Less, 1, 47),
-            Token::new(LessEqual, 1, 49),
-            Token::new(Plus, 1, 52),
-            Token::new(PlusEqual, 1, 54),
-            Token::new(Minus, 1, 57),
-            Token::new(MinusEqual, 1, 59),
-            Token::new(Star, 1, 62),
-            Token::new(StarEqual, 1, 64),
-            Token::new(Slash, 1, 67),
-            Token::new(SlashEqual, 1, 69),
+            OpenParen,
+            CloseParen,
+            OpenBracket,
+            CloseBracket,
+            OpenBrace,
+            CloseBrace,
+            Comma,
+            Dot,
+            Semicolon,
+            And,
+            Or,
+            Range,
+            RangeInclusive,
+            Equal,
+            EqualEqual,
+            Bang,
+            BangEqual,
+            Greater,
+            GreaterEqual,
+            Less,
+            LessEqual,
+            Plus,
+            PlusEqual,
+            Minus,
+            MinusEqual,
+            Star,
+            StarEqual,
+            Slash,
+            SlashEqual,
         ],
     )
 }
 
 #[test]
-fn strings() {}
+fn strings() {
+    // Single line string
+    test_tokens("\"Hello, World\"", &vec![Str("Hello, World".to_string())]);
+
+    // Multiline string
+    test_tokens(
+        &unindent(
+            "\"
+    Hello, World
+    Foo, Bar
+    \"",
+        ),
+        &vec![Str("\nHello, World\nFoo, Bar\n".to_string())],
+    )
+}
 
 #[test]
 fn chars() {}
 
 #[test]
-fn numbers() {}
+fn numbers() {
+    // Test integers
+    test_tokens(
+        "25 32 43",
+        &vec![
+            Int("25".to_string()),
+            Int("32".to_string()),
+            Int("43".to_string()),
+        ],
+    );
+
+    // Test floats
+    test_tokens(
+        "3.14159 12.2",
+        &vec![Float("3.14159".to_string()), Float("12.2".to_string())],
+    );
+
+    // Test too many dots
+    test_tokens(
+        "4.2.1",
+        &vec![Float("4.2".to_string()), Dot, Int("1".to_string())],
+    )
+}
 
 #[test]
-fn identifiers() {}
+fn identifiers() {
+    test_tokens(
+        "foo bar baz",
+        &vec![
+            Ident("foo".to_string()),
+            Ident("bar".to_string()),
+            Ident("baz".to_string()),
+        ],
+    )
+}
 
 #[test]
-fn keywords() {}
-
-#[test]
-fn whitespace() {}
+fn keywords() {
+    test_tokens(
+        "class else false for fun if impls import match mut return trait true let while",
+        &vec![
+            Class, Else, False, For, Fun, If, Impls, Import, Match, Mut, Return, Trait, True, Let,
+            While,
+        ],
+    )
+}

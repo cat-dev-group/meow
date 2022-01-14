@@ -72,9 +72,9 @@ impl<'a> Lexer<'a> {
     pub fn new(source: &'a str) -> Self {
         Self {
             source: source.chars().peekable(),
-            position: 0,
+            position: 1,
             line: 1,
-            column: 0,
+            column: 1,
         }
     }
 
@@ -91,7 +91,7 @@ impl<'a> Lexer<'a> {
     fn advance_line(&mut self) -> Option<char> {
         self.position += 1;
         self.line += 1;
-        self.column = 0;
+        self.column = 1;
         self.source.next()
     }
 
@@ -110,10 +110,16 @@ impl<'a> Lexer<'a> {
         *self.source.peek().unwrap_or(&'\0')
     }
 
+    // Return true or false based on whether the lexer is at the end of the source code
+    fn at_end(&mut self) -> bool {
+        self.peek() == '\0'
+    }
+
     /// Given a `TokenKind`, create an `Token` with the `line` and `column`
     /// data from the lexer.
-    fn create_token(&mut self, kind: TokenKind) -> Token {
-        Token::new(kind, self.line, self.column)
+    fn create_token(&mut self, kind: TokenKind, length: u32) -> Token {
+        let position = self.position as u32 - length;
+        Token::new(kind, self.line, position)
     }
 
     /// Match the next token. If it's the expected character, generate a
@@ -125,11 +131,11 @@ impl<'a> Lexer<'a> {
         double: TokenKind,
     ) -> Token {
         if self.peek() == expected_double {
-            let token = self.create_token(double);
+            let token = self.create_token(double, 2);
             self.advance();
             token
         } else {
-            self.create_token(single)
+            self.create_token(single, 1)
         }
     }
 
@@ -138,12 +144,175 @@ impl<'a> Lexer<'a> {
     fn with_double(&mut self, expected: char, kind: TokenKind) -> Token {
         let c = self.peek();
         if c == expected {
-            let token = self.create_token(kind);
+            let token = self.create_token(kind, 1);
             self.advance();
             token
         } else {
-            self.create_token(Error(format!("Unknown character `{}` found in source", c)))
+            self.create_token(
+                Error(format!("Unknown character `{}` found in source", c)),
+                1,
+            )
         }
+    }
+
+    fn lex_string(&mut self) -> Token {
+        let mut value = String::new();
+
+        while self.peek() != '"' {
+            let char = self.newline_aware_advance();
+            value.push(char.unwrap());
+        }
+
+        let length = value.len() as u32;
+
+        if self.at_end() {
+            return self.create_token(Error("Unterminated string literal, expected closing quote, EOF (End of File) encountered".to_string()), length + 1);
+        }
+
+        self.advance();
+        self.create_token(Str(value), length + 2)
+    }
+
+    fn lex_number(&mut self, first_char: char) -> Token {
+        let mut is_integer = true;
+
+        let mut value = String::from(first_char);
+
+        if self.at_end() {
+            return self.create_token(TokenKind::Int(value), 1);
+        }
+
+        while self.peek().is_numeric() {
+            let char = self.advance();
+            value.push(char.unwrap());
+        }
+
+        if self.peek() == '.' {
+            // Set is_integer to false, since dot indicates that value is a decimal
+            is_integer = false;
+            // Consume and add dot to value
+            value.push(self.advance().unwrap());
+            while self.peek().is_numeric() {
+                value.push(self.advance().unwrap())
+            }
+        }
+
+        let length = value.len() as u32;
+
+        self.create_token(
+            if is_integer {
+                TokenKind::Int(value)
+            } else {
+                TokenKind::Float(value)
+            },
+            length,
+        )
+    }
+
+    fn get_keyword(
+        &self,
+        value: &str,
+        keyword: &str,
+        length: usize,
+        token: TokenKind,
+    ) -> TokenKind {
+        if value[length..] == keyword[length..] {
+            token
+        } else {
+            TokenKind::Ident(value.to_string())
+        }
+    }
+
+    // Use a state machine to single out Meow keywords
+    fn ident_type(&self, value: &str) -> TokenKind {
+        match &value[..1] {
+            "c" => self.get_keyword(value, "class", 1, TokenKind::Class),
+            "e" => self.get_keyword(value, "else", 1, TokenKind::Else),
+            "f" => {
+                if value.len() < 2 {
+                    TokenKind::Ident(value.to_string());
+                }
+
+                match &value[1..2] {
+                    "a" => self.get_keyword(value, "false", 2, TokenKind::False),
+                    "o" => self.get_keyword(value, "for", 2, TokenKind::For),
+                    "u" => self.get_keyword(value, "fun", 2, TokenKind::Fun),
+                    _ => TokenKind::Ident(value.to_string()),
+                }
+            }
+            "i" => {
+                if value.len() < 2 {
+                    return TokenKind::Ident(value.to_string());
+                }
+
+                match &value[1..2] {
+                    "f" => TokenKind::If,
+                    "m" => {
+                        if value.len() < 5 {
+                            return TokenKind::Ident(value.to_string());
+                        }
+
+                        if &value[2..3] == "p" {
+                            return match &value[3..4] {
+                                "o" => self.get_keyword(value, "import", 4, TokenKind::Import),
+                                "l" => self.get_keyword(value, "impls", 4, TokenKind::Impls),
+                                _ => TokenKind::Ident(value.to_string()),
+                            };
+                        }
+
+                        TokenKind::Ident(value.to_string())
+                    }
+                    _ => TokenKind::Ident(value.to_string()),
+                }
+            }
+            "l" => self.get_keyword(value, "let", 1, TokenKind::Let),
+            "m" => {
+                if value.len() < 2 {
+                    return TokenKind::Ident(value.to_string());
+                }
+
+                match &value[1..2] {
+                    "a" => self.get_keyword(value, "match", 2, TokenKind::Match),
+                    "u" => self.get_keyword(value, "mut", 2, TokenKind::Mut),
+                    _ => TokenKind::Ident(value.to_string()),
+                }
+            }
+            "r" => self.get_keyword(value, "return", 1, TokenKind::Return),
+            "t" => {
+                if value.len() < 3 {
+                    return TokenKind::Ident(value.to_string());
+                }
+
+                if !(&value[1..2] == "r") {
+                    return TokenKind::Ident(value.to_string());
+                }
+
+                match &value[2..3] {
+                    "u" => self.get_keyword(value, "true", 3, TokenKind::True),
+                    "a" => self.get_keyword(value, "trait", 3, TokenKind::Trait),
+                    _ => TokenKind::Ident(value.to_string()),
+                }
+            }
+            "w" => return self.get_keyword(value, "while", 1, TokenKind::While),
+            _ => TokenKind::Ident(value.to_string()),
+        }
+    }
+
+    fn get_ident(&mut self, first_char: char) -> Token {
+        let mut value = String::from(first_char);
+
+        if self.at_end() {
+            return self.create_token(TokenKind::Ident(value), 1);
+        }
+
+        // Add to the eventual value as long as the next character is a valid identifer
+        while unicode_xid::UnicodeXID::is_xid_continue(self.peek()) {
+            let char = self.advance();
+            value.push(char.unwrap());
+        }
+
+        let token_type = self.ident_type(&value);
+        self.create_token(token_type, value.len() as u32)
     }
 
     /// Return the next `Token` for use in the parser. This is the method that
@@ -176,14 +345,13 @@ impl<'a> Lexer<'a> {
 
         if let Some(c) = next {
             return match c {
-                // TODO: positioning for ranges is off
                 // range characters
                 '.' if self.peek() == '.' => {
-                    let mut token = self.create_token(Range);
                     self.advance();
+                    let mut token = self.create_token(Range, 2);
                     if self.peek() == '=' {
-                        token = self.create_token(RangeInclusive);
                         self.advance();
+                        token = self.create_token(RangeInclusive, 3);
                     }
                     token
                 }
@@ -193,15 +361,15 @@ impl<'a> Lexer<'a> {
                 // identifiers and keywords
 
                 // simple single character tokens
-                '(' => self.create_token(OpenParen),
-                ')' => self.create_token(CloseParen),
-                '[' => self.create_token(OpenBracket),
-                ']' => self.create_token(CloseBracket),
-                '{' => self.create_token(OpenBrace),
-                '}' => self.create_token(CloseBrace),
-                ',' => self.create_token(Comma),
-                '.' => self.create_token(Dot),
-                ';' => self.create_token(Semicolon),
+                '(' => self.create_token(OpenParen, 1),
+                ')' => self.create_token(CloseParen, 1),
+                '[' => self.create_token(OpenBracket, 1),
+                ']' => self.create_token(CloseBracket, 1),
+                '{' => self.create_token(OpenBrace, 1),
+                '}' => self.create_token(CloseBrace, 1),
+                ',' => self.create_token(Comma, 1),
+                '.' => self.create_token(Dot, 1),
+                ';' => self.create_token(Semicolon, 1),
 
                 // simple double character tokens
                 '&' => self.with_double('&', And),
@@ -220,9 +388,21 @@ impl<'a> Lexer<'a> {
                 // whitespace
                 c if is_whitespace(c) => self.next_token(),
 
-                c => self.create_token(Error(format!("Unknown character `{}` found in source", c))),
+                // String literals
+                '"' => self.lex_string(),
+
+                // Integer literals
+                '0'..='9' => self.lex_number(c),
+
+                // Identifiers
+                c if c == '_' || unicode_xid::UnicodeXID::is_xid_start(c) => self.get_ident(c),
+
+                c => self.create_token(
+                    Error(format!("Unknown character `{}` found in source", c)),
+                    1,
+                ),
             };
         }
-        self.create_token(Eof)
+        self.create_token(Eof, 0)
     }
 }
