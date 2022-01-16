@@ -9,6 +9,7 @@
 
 pub mod errors;
 pub mod lexer;
+pub mod parser;
 
 use anyhow::Result;
 use lexer::{token::TokenKind, Lexer};
