@@ -82,6 +82,7 @@ pub enum TokenKind {
 /// computed on demand as need be.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Token {
+    pub start: usize,
     pub kind: TokenKind,
     pub line: u32,
     pub column: u32,
@@ -97,7 +98,12 @@ impl Token {
     /// Create a new token. This is only used in the interpreter by way of the
     /// various methods on the `Lexer` struct, but is available for testing
     /// purposes.
-    pub fn new(kind: TokenKind, line: u32, column: u32) -> Self {
-        Self { kind, line, column }
+    pub fn new(kind: TokenKind, line: u32, column: u32, start: usize) -> Self {
+        Self {
+            start,
+            kind,
+            line,
+            column,
+        }
     }
 }

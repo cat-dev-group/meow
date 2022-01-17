@@ -6,6 +6,7 @@
 use ansi_term::Colour::Red;
 use anyhow::Result;
 use clap::Parser;
+// use meow::errors::{ErrorKind, Label, Responder};
 use meow::{run, run_from_file};
 use std::process;
 
@@ -22,6 +23,23 @@ struct Args {
 }
 
 fn main() -> Result<()> {
+    //     let source = "
+    // fun main() {
+    //     print(\"Hello, World)
+    // }
+    //     ";
+    //     let responder = Responder::new(source.to_string());
+
+    //     let label = Label::new(14, 38, "Unclosed string");
+
+    //     responder.emit_error(
+    //         ErrorKind::InvalidSyntax,
+    //         2,
+    //         18,
+    //         "main.mw",
+    //         vec![label],
+    //         "Expected closing double quote `\"`",
+    //     );
     let args = Args::parse();
 
     if args.file.is_some() && args.string.is_some() {

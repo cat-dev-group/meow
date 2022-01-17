@@ -119,7 +119,7 @@ impl<'a> Lexer<'a> {
     /// data from the lexer.
     fn create_token(&mut self, kind: TokenKind, length: u32) -> Token {
         let position = self.position as u32 - length;
-        Token::new(kind, self.line, position)
+        Token::new(kind, self.line, position, self.position)
     }
 
     /// Match the next token. If it's the expected character, generate a

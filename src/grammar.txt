@@ -1,0 +1,60 @@
+# Grammar for the Meow programming language
+# The AST (Abstract Syntax Tree) for this grammar is located in src/parser/ast.rs
+
+program -> decl* EOF
+
+decl -> class_decl
+      | trait_decl
+      | func_decl
+
+class_decl  -> "class" IDENT ( "impls" ( IDENT )* )? from "IDENT"
+               "{" func_decl* "}"
+trait_decl  -> "trait" IDENT "{" ( ( func_meta ";") | func_decl )* "}"
+func_decl   -> func_meta block
+
+func_meta   -> "func" IDENT "(" parameters ")"
+parameters -> IDENT ( "," IDENT )*
+
+stmt -> decl
+      | let
+      | const
+      | return
+      | (expr ";")
+
+let_stmt    -> "let" IDENT = expr;
+const_stmt  -> "const" IDENT = expr;
+return_stmt -> "return" expr;
+
+expr -> literal
+      | binary
+      | unary
+      | IDENT
+      | grouping
+      | call
+      | assignment
+      | if
+      | block
+      | for
+      | while
+      | match
+
+literal -> STRING | CHAR | INTEGER | FLOAT | "true" | "false" | array | tuple
+binary -> expr binary_op expr
+binary_op -> "+" | "-" | "*" | "/" | "==" | "!=" | ">" | ">=" | "<" | "<=" | "&&" | "||"
+unary -> unary_op expr
+unary_op -> "-" | "!"
+
+grouping -> "(" expr ")"
+
+call -> IDENT ( "(" arguments ")" )*
+arguments -> expression ( "," expression )*
+
+assignment -> IDENT "=" expr
+
+if -> "if" expression statement ( "else" statement )?
+block -> "{" statement "}"
+
+for -> "for" expression statement
+while -> "while" expression statement
+match -> "match" expression "{" ( case )* "}"
+case -> expression ":" statement ( "," )?
