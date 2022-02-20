@@ -9,7 +9,7 @@ pub enum Stmt {
     ExpressionStmt(Expr),
 }
 
-// The expression AST node
+/// The expression AST node
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Literal {

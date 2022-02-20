@@ -155,7 +155,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    // Lexes a string
+    /// Lexes a string literal
     fn lex_string(&mut self) -> Token {
         let mut value = String::new();
 
@@ -174,7 +174,7 @@ impl<'a> Lexer<'a> {
         self.create_token(Str(value), length + 2)
     }
 
-    // Lexes either an integer or a float
+    /// Lexes either an integer or a float
     fn lex_number(&mut self, first_char: char) -> Token {
         let mut is_integer = true;
 
@@ -211,7 +211,7 @@ impl<'a> Lexer<'a> {
         )
     }
 
-    // Checks whether a given value matches the keyword
+    /// Checks whether a given value matches the keyword
     fn get_keyword(
         &self,
         value: &str,
@@ -226,14 +226,14 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    // Use a state machine to single out Meow keywords
+    /// Use a state machine to single out Meow keywords
     fn ident_type(&self, value: &str) -> TokenKind {
         match &value[..1] {
             "c" => self.get_keyword(value, "class", 1, TokenKind::Class),
             "e" => self.get_keyword(value, "else", 1, TokenKind::Else),
             "f" => {
                 if value.len() < 2 {
-                    TokenKind::Ident(value.to_string());
+                    return TokenKind::Ident(value.to_string());
                 }
 
                 match &value[1..2] {
@@ -286,7 +286,7 @@ impl<'a> Lexer<'a> {
                     return TokenKind::Ident(value.to_string());
                 }
 
-                if !(&value[1..2] == "r") {
+                if &value[1..2] != "r" {
                     return TokenKind::Ident(value.to_string());
                 }
 
@@ -296,12 +296,12 @@ impl<'a> Lexer<'a> {
                     _ => TokenKind::Ident(value.to_string()),
                 }
             }
-            "w" => return self.get_keyword(value, "while", 1, TokenKind::While),
+            "w" => self.get_keyword(value, "while", 1, TokenKind::While),
             _ => TokenKind::Ident(value.to_string()),
         }
     }
 
-    // Lexes identifiers and keywords
+    /// Lexes identifiers and keywords
     fn get_ident(&mut self, first_char: char) -> Token {
         let mut value = String::from(first_char);
 
@@ -319,7 +319,7 @@ impl<'a> Lexer<'a> {
         self.create_token(token_type, value.len() as u32)
     }
 
-    // Lexes a single char
+    /// Lexes a single char
     fn lex_char(&mut self) -> Token {
         // If at end, create an error token since there isn't a closing quote
         if self.at_end() {
